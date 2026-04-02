@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReacTrace — Chemical Kinetics Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111318;
+    --surface2: #181c23;
+    --border: #232832;
+    --border-bright: #2e3545;
+    --text: #e8edf5;
+    --text-muted: #6b7a96;
+    --text-dim: #3d4a62;
+    --accent-a: #4fc3f7;
+    --accent-b: #69f0ae;
+    --accent-c: #ff8a65;
+    --accent-d: #ce93d8;
+    --accent-e: #fff176;
+    --accent-warn: #ff5252;
+    --grid: rgba(255,255,255,0.03);
+    --glow-a: rgba(79,195,247,0.15);
+    --glow-b: rgba(105,240,174,0.15);
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page-wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px 48px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 0 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .logo-name {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  .logo-name span { color: var(--accent-a); }
+
+  .logo-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border: 1px solid var(--border-bright);
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-b);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* ── Layout ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── Panels ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .panel-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .panel-body { padding: 16px; }
+
+  /* ── Reaction selector ── */
+  .reaction-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .r-tab {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 8px 6px;
+    border: 1px solid var(--border-bright);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  .r-tab strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 1px;
+  }
+
+  .r-tab:hover {
+    border-color: var(--accent-a);
+    color: var(--text);
+  }
+
+  .r-tab.active {
+    border-color: var(--accent-a);
+    background: rgba(79,195,247,0.08);
+    color: var(--accent-a);
+  }
+
+  /* ── Equation display ── */
+  .eq-display {
+    background: var(--surface2);
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 500;
+    text-align: center;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    position: relative;
+  }
+
+  .eq-display .law {
+    display: block;
+    font-size: 10px;
+    font-weight: 300;
+    color: var(--text-muted);
+    margin-top: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── Section labels ── */
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 16px 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Fields ── */
+  .field-row {
+    margin-bottom: 11px;
+  }
+
+  .field-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .species-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .field-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .field-inner input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border-bright);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .field-inner input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-a);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent-a);
+    transition: transform 0.1s;
+  }
+
+  .field-inner input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+
+  .field-inner input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-a);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+  }
+
+  .field-value {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 46px;
+    text-align: right;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 6px;
+  }
+
+  /* ── Run button ── */
+  .run-btn {
+    width: 100%;
+    margin-top: 18px;
+    padding: 12px;
+    background: var(--accent-a);
+    color: var(--bg);
+    border: none;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .run-btn:hover {
+    background: #81d4fa;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 24px rgba(79,195,247,0.3);
+  }
+
+  .run-btn:active { transform: translateY(0); }
+
+  /* ── Right panel ── */
+  .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  @media (max-width: 700px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card:hover { border-color: var(--border-bright); }
+
+  .stat-name {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .stat-val {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+
+  /* ── Chart panel ── */
+  .chart-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .chart-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .legend-line {
+    width: 18px;
+    height: 2px;
+    border-radius: 1px;
+    flex-shrink: 0;
+  }
+
+  .chart-body { padding: 16px; }
+
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 340px;
+  }
+
+  /* ── Integrated law display ── */
+  .law-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .law-box .eq-text { color: var(--text); font-weight: 500; }
+
+  /* ── Concentration display ── */
+  .conc-display {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .conc-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .conc-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .conc-label { color: var(--text-muted); font-size: 11px; }
+  .conc-val { margin-left: auto; color: var(--text); font-weight: 500; }
+
+  /* ── Tooltip cursor line ── */
+  #cursor-time {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    min-height: 32px;
+    background: var(--surface2);
+  }
+
+  /* Entry animation */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .panel, .stat-card, .chart-panel {
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .stat-card:nth-child(1) { animation-delay: 0.05s; }
+  .stat-card:nth-child(2) { animation-delay: 0.10s; }
+  .stat-card:nth-child(3) { animation-delay: 0.15s; }
+  .stat-card:nth-child(4) { animation-delay: 0.20s; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <header>
+    <div class="logo">
+      <span class="logo-name">Reac<span>Trace</span></span>
+      <span class="logo-tag">v2.0</span>
+    </div>
+    <div class="header-status">
+      <span class="status-dot"></span>
+      LIVE SIMULATION
+    </div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- ── LEFT: Controls ── -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 14 L6 6 L10 10 L14 2" stroke="#4fc3f7" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="panel-title">Parameters</span>
+      </div>
+      <div class="panel-body">
+
+        <!-- Reaction type tabs -->
+        <div class="section-label">Reaction Order</div>
+        <div class="reaction-tabs">
+          <button class="r-tab active" data-order="1" onclick="setOrder(1,this)">
+            <strong>1st Order</strong>A → B
+          </button>
+          <button class="r-tab" data-order="2" onclick="setOrder(2,this)">
+            <strong>2nd Order</strong>A + A → B
+          </button>
+          <button class="r-tab" data-order="0" onclick="setOrder(0,this)">
+            <strong>0th Order</strong>A → B (const)
+          </button>
+          <button class="r-tab" data-order="rev" onclick="setOrder('rev',this)">
+            <strong>Reversible</strong>A ⇌ B
+          </button>
+        </div>
+
+        <!-- Equation display -->
+        <div class="eq-display" id="eq-display">
+          A → B
+          <span class="law" id="eq-law">Rate = k[A] &nbsp;|&nbsp; [A] = [A]₀e⁻ᵏᵗ</span>
+        </div>
+
+        <!-- Concentrations -->
+        <div class="section-label">Initial Concentrations</div>
+
+        <div class="field-row">
+          <div class="field-label">
+            <span class="species-dot" style="background:#4fc3f7"></span>
+            [A]₀ — reactant A (mol/L)
+          </div>
+          <div class="field-inner">
+            <input type="range" id="slA0" min="0.1" max="5" step="0.05" value="2"
+              oninput="updateVal('valA0',this.value,'');simulate()">
+            <span class="field-value" id="valA0">2.00</span>
+          </div>
+        </div>
+
+        <div class="field-row" id="row-B0" style="display:none">
+          <div class="field-label">
+            <span class="species-dot" style="background:#69f0ae"></span>
+            [B]₀ — initial product (mol/L)
+          </div>
+          <div class="field-inner">
+            <input type="range" id="slB0" min="0" max="5" step="0.05" value="0"
+              oninput="updateVal('valB0',this.value,'');simulate()">
+            <span class="field-value" id="valB0">0.00</span>
+          </div>
+        </div>
+
+        <!-- Rate constants -->
+        <div class="section-label">Rate Constants</div>
+
+        <div class="field-row">
+          <div class="field-label">
+            <span class="species-dot" style="background:#fff176"></span>
+            kf — forward rate (s⁻¹)
+          </div>
+          <div class="field-inner">
+            <input type="range" id="slKf" min="0.01" max="2" step="0.01" value="0.4"
+              oninput="updateVal('valKf',this.value,'');simulate()">
+            <span class="field-value" id="valKf">0.40</span>
+          </div>
+        </div>
+
+        <div class="field-row" id="row-kr" style="display:none">
+          <div class="field-label">
+            <span class="species-dot" style="background:#ce93d8"></span>
+            kr — reverse rate (s⁻¹)
+          </div>
+          <div class="field-inner">
+            <input type="range" id="slKr" min="0.01" max="2" step="0.01" value="0.15"
+              oninput="updateVal('valKr',this.value,'');simulate()">
+            <span class="field-value" id="valKr">0.15</span>
+          </div>
+        </div>
+
+        <!-- Time span -->
+        <div class="section-label">Simulation</div>
+
+        <div class="field-row">
+          <div class="field-label">
+            <span class="species-dot" style="background:#6b7a96"></span>
+            Time span (seconds)
+          </div>
+          <div class="field-inner">
+            <input type="range" id="slTmax" min="5" max="200" step="1" value="30"
+              oninput="updateVal('valTmax',this.value,' s');simulate()">
+            <span class="field-value" id="valTmax">30 s</span>
+          </div>
+        </div>
+
+        <button class="run-btn" onclick="simulate()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <polygon points="2,1 13,7 2,13" fill="currentColor"/>
+          </svg>
+          Run Simulation
+        </button>
+
+      </div>
+    </div>
+
+    <!-- ── RIGHT: Output ── -->
+    <div class="right-col">
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-name">Half-life t½</div>
+          <div class="stat-val" id="st-t12" style="color:#4fc3f7">—</div>
+          <div class="stat-unit">seconds</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-name">Final [A]</div>
+          <div class="stat-val" id="st-af" style="color:#69f0ae">—</div>
+          <div class="stat-unit">mol/L</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-name">Keq</div>
+          <div class="stat-val" id="st-keq" style="color:#ce93d8">—</div>
+          <div class="stat-unit">kf / kr</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-name">Conversion</div>
+          <div class="stat-val" id="st-conv" style="color:#ff8a65">—</div>
+          <div class="stat-unit">% of A reacted</div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <span class="chart-title">Concentration vs. Time</span>
+          <div class="chart-legend" id="chart-legend">
+            <div class="legend-item">
+              <div class="legend-line" style="background:#4fc3f7"></div>[A] Reactant
+            </div>
+            <div class="legend-item">
+              <div class="legend-line" style="background:#69f0ae"></div>[B] Product
+            </div>
+          </div>
+        </div>
+        <div class="chart-body">
+          <div class="chart-wrap">
+            <canvas id="kinChart"></canvas>
+          </div>
+        </div>
+        <div id="cursor-time">Hover the chart to inspect concentrations at any time point.</div>
+      </div>
+
+      <!-- Current values display -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="#69f0ae" stroke-width="1.2"/>
+              <path d="M7 4v4l2.5 1.5" stroke="#69f0ae" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="panel-title">Live Readout at Cursor</span>
+        </div>
+        <div class="panel-body">
+          <div class="conc-display" id="live-concs">
+            <div class="conc-item">
+              <span class="conc-dot" style="background:#4fc3f7"></span>
+              <span class="conc-label">[A]</span>
+              <span class="conc-val" id="lv-A">—</span>
+            </div>
+            <div class="conc-item">
+              <span class="conc-dot" style="background:#69f0ae"></span>
+              <span class="conc-label">[B]</span>
+              <span class="conc-val" id="lv-B">—</span>
+            </div>
+            <div class="conc-item">
+              <span class="conc-dot" style="background:#fff176"></span>
+              <span class="conc-label">Rate</span>
+              <span class="conc-val" id="lv-rate">—</span>
+            </div>
+            <div class="conc-item">
+              <span class="conc-dot" style="background:#ff8a65"></span>
+              <span class="conc-label">t (s)</span>
+              <span class="conc-val" id="lv-t">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─── State ─── */
+let currentOrder = 1;
+let kinChart = null;
+let simData = { times: [], A: [], B: [] };
+
+const EQUATIONS = {
+  1:   { eq: 'A → B',    law: 'Rate = k[A]  |  [A] = [A]₀e⁻ᵏᵗ' },
+  2:   { eq: 'A + A → B', law: 'Rate = k[A]²  |  1/[A] = 1/[A]₀ + kt' },
+  0:   { eq: 'A → B',    law: 'Rate = k  |  [A] = [A]₀ − kt' },
+  rev: { eq: 'A ⇌ B',   law: 'Rate = kf[A] − kr[B]  |  Keq = kf/kr' }
+};
+
+function setOrder(o, btn) {
+  currentOrder = o;
+  document.querySelectorAll('.r-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('eq-display').childNodes[0].textContent = EQUATIONS[o].eq + '\n';
+  document.getElementById('eq-law').innerHTML = EQUATIONS[o].law;
+  document.getElementById('row-kr').style.display = (o === 'rev') ? '' : 'none';
+  document.getElementById('row-B0').style.display = (o === 'rev') ? '' : 'none';
+  simulate();
+}
+
+function updateVal(id, v, suffix) {
+  document.getElementById(id).textContent = parseFloat(v).toFixed(2) + suffix;
+}
+
+/* ─── RK4 Solver ─── */
+function rk4(dydt, y0, t0, t1, steps) {
+  const dt = (t1 - t0) / steps;
+  const ts = [t0], ys = [y0.slice()];
+  let y = y0.slice(), t = t0;
+  for (let i = 0; i < steps; i++) {
+    const k1 = dydt(t, y);
+    const y2 = y.map((v, j) => v + 0.5 * dt * k1[j]);
+    const k2 = dydt(t + 0.5 * dt, y2);
+    const y3 = y.map((v, j) => v + 0.5 * dt * k2[j]);
+    const k3 = dydt(t + 0.5 * dt, y3);
+    const y4 = y.map((v, j) => v + dt * k3[j]);
+    const k4 = dydt(t + dt, y4);
+    y = y.map((v, j) => Math.max(0, v + (dt / 6) * (k1[j] + 2*k2[j] + 2*k3[j] + k4[j])));
+    t += dt;
+    ts.push(+t.toFixed(4));
+    ys.push(y.slice());
+  }
+  return { ts, ys };
+}
+
+/* ─── Main simulate ─── */
+function simulate() {
+  const A0   = parseFloat(document.getElementById('slA0').value);
+  const B0   = parseFloat(document.getElementById('slB0').value) || 0;
+  const kf   = parseFloat(document.getElementById('slKf').value);
+  const kr   = parseFloat(document.getElementById('slKr').value);
+  const tmax = parseFloat(document.getElementById('slTmax').value);
+  const order = currentOrder;
+  const STEPS = 500;
+
+  let dydt, y0;
+
+  if (order === 1) {
+    y0 = [A0, 0];
+    dydt = (t, y) => {
+      const r = kf * Math.max(y[0], 0);
+      return [-r, r];
+    };
+  } else if (order === 2) {
+    y0 = [A0, 0];
+    dydt = (t, y) => {
+      const r = kf * Math.max(y[0], 0) ** 2;
+      return [-r, r / 2];
+    };
+  } else if (order === 0) {
+    y0 = [A0, 0];
+    dydt = (t, y) => {
+      const r = Math.min(kf, Math.max(y[0], 0) / 0.001);
+      return [-r, r];
+    };
+  } else { // reversible
+    y0 = [A0, B0];
+    dydt = (t, y) => {
+      const r = kf * Math.max(y[0], 0) - kr * Math.max(y[1], 0);
+      return [-r, r];
+    };
+  }
+
+  const { ts, ys } = rk4(dydt, y0, 0, tmax, STEPS);
+  simData.times = ts;
+  simData.A = ys.map(y => +y[0].toFixed(5));
+  simData.B = ys.map(y => +y[1].toFixed(5));
+
+  /* ── Compute stats ── */
+  const A0val = simData.A[0];
+  const Afinal = simData.A[simData.A.length - 1];
+  const conversion = ((A0val - Afinal) / A0val * 100).toFixed(1);
+  let halflife = '—';
+
+  if (order === 1) {
+    halflife = (Math.LN2 / kf).toFixed(2);
+  } else if (order === 2) {
+    halflife = (1 / (kf * A0val)).toFixed(2);
+  } else if (order === 0) {
+    halflife = (A0val / (2 * kf)).toFixed(2);
+  } else {
+    halflife = (Math.LN2 / (kf + kr)).toFixed(2);
+  }
+
+  document.getElementById('st-t12').textContent = halflife;
+  document.getElementById('st-af').textContent = Afinal.toFixed(3);
+  document.getElementById('st-keq').textContent = (order === 'rev') ? (kf/kr).toFixed(2) : 'N/A';
+  document.getElementById('st-conv').textContent = conversion + '%';
+
+  drawChart();
+}
+
+/* ─── Chart ─── */
+function drawChart() {
+  const labels = simData.times;
+
+  const datasets = [
+    {
+      label: '[A] Reactant',
+      data: simData.A,
+      borderColor: '#4fc3f7',
+      backgroundColor: 'rgba(79,195,247,0.07)',
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: true,
+      tension: 0.3
+    },
+    {
+      label: '[B] Product',
+      data: simData.B,
+      borderColor: '#69f0ae',
+      backgroundColor: 'rgba(105,240,174,0.07)',
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: true,
+      tension: 0.3
+    }
+  ];
+
+  if (kinChart) {
+    kinChart.data.labels = labels;
+    kinChart.data.datasets = datasets;
+    kinChart.update('none');
+    return;
+  }
+
+  kinChart = new Chart(document.getElementById('kinChart'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400, easing: 'easeOutCubic' },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          backgroundColor: '#111318',
+          borderColor: '#2e3545',
+          borderWidth: 1,
+          titleFont: { family: "'IBM Plex Mono', monospace", size: 11 },
+          bodyFont: { family: "'IBM Plex Mono', monospace", size: 12 },
+          titleColor: '#6b7a96',
+          bodyColor: '#e8edf5',
+          padding: 10,
+          callbacks: {
+            title: (items) => `t = ${parseFloat(items[0].label).toFixed(2)} s`,
+            label: (item) => {
+              const val = parseFloat(item.raw).toFixed(4);
+              return `  ${item.dataset.label}: ${val} mol/L`;
+            },
+            afterBody: (items) => {
+              const t = parseFloat(items[0].label);
+              const A = parseFloat(items[0].raw);
+              const kf = parseFloat(document.getElementById('slKf').value);
+              const kr = parseFloat(document.getElementById('slKr').value);
+              const B = items[1] ? parseFloat(items[1].raw) : 0;
+              let rate;
+              if (currentOrder === 1) rate = (kf * A).toFixed(4);
+              else if (currentOrder === 2) rate = (kf * A * A).toFixed(4);
+              else if (currentOrder === 0) rate = kf.toFixed(4);
+              else rate = (kf * A - kr * B).toFixed(4);
+
+              document.getElementById('lv-A').textContent = A.toFixed(4) + ' M';
+              document.getElementById('lv-B').textContent = (items[1] ? parseFloat(items[1].raw) : 0).toFixed(4) + ' M';
+              document.getElementById('lv-rate').textContent = rate + ' M/s';
+              document.getElementById('lv-t').textContent = t.toFixed(2);
+              document.getElementById('cursor-time').textContent =
+                `t = ${t.toFixed(2)} s  |  [A] = ${A.toFixed(4)} M  |  rate = ${rate} M/s`;
+              return '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          min: 0,
+          title: {
+            display: true,
+            text: 'Time (s)',
+            font: { family: "'IBM Plex Mono', monospace", size: 11 },
+            color: '#6b7a96'
+          },
+          ticks: {
+            font: { family: "'IBM Plex Mono', monospace", size: 10 },
+            color: '#6b7a96',
+            maxTicksLimit: 10,
+            callback: v => v.toFixed(0)
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: '#232832' }
+        },
+        y: {
+          min: 0,
+          title: {
+            display: true,
+            text: 'Concentration (mol/L)',
+            font: { family: "'IBM Plex Mono', monospace", size: 11 },
+            color: '#6b7a96'
+          },
+          ticks: {
+            font: { family: "'IBM Plex Mono', monospace", size: 10 },
+            color: '#6b7a96',
+            callback: v => v.toFixed(2)
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: '#232832' }
+        }
+      }
+    }
+  });
+}
+
+/* ─── Init ─── */
+simulate();
+</script>
+</body>
+</html>
